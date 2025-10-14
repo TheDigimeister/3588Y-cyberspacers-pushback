@@ -1,9 +1,4 @@
-#include "drive.hpp"
-#include "lemlib/chassis/chassis.hpp"
 #include "main.h"
-#include "pros/adi.h"
-#include "pros/adi.hpp"
-#include "pros/optical.hpp"
 
 pros::Motor front_intake(-11);
 //front_intake should be outaking into the goals if its voltage is at -127.

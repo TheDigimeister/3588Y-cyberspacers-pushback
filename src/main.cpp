@@ -1,10 +1,5 @@
-#include <atomic>
 #include "main.h"
-#include "drive.hpp"
-// #include "lemlib/api.hpp"
-// #include "pros/colors.h"
-#include "pros/misc.h"
-#include "pros/optical.hpp"
+#include "lemlib/api.hpp"
 
 int AUTON_NUM = 1;
 

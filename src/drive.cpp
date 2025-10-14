@@ -1,6 +1,4 @@
-#include "lemlib/chassis/trackingWheel.hpp"
 #include "main.h"
-#include "lemlib/api.hpp"
 
 pros::MotorGroup left_mg({19, -18, 20});
 pros::MotorGroup right_mg({-16, 15, -17});
