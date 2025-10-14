@@ -1,4 +1,7 @@
 #include "main.h"
+#include "pros/distance.hpp"
+
+
 
 pros::Motor front_intake(-11);
 //front_intake should be outaking into the goals if its voltage is at -127.
@@ -12,3 +15,8 @@ pros::Optical Color_sensor(4);
 
 pros::ADIDigitalOut Low('A');
 pros::ADIDigitalOut Switch('D');
+
+pros::Distance front_dist(1);
+pros::Distance back_dist(2);
+pros::Distance left_dist(3);
+pros::Distance right_dist(4);
