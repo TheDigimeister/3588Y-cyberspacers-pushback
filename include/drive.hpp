@@ -3,7 +3,10 @@
 #include "lemlib/chassis/chassis.hpp"
 #include "pros/adi.hpp"
 #include "pros/distance.hpp"
+#include "pros/misc.hpp"
 #include "pros/optical.hpp"
+
+extern pros::Controller controller;
 
 extern lemlib::Chassis chassis;
 extern pros::Motor front_intake;
@@ -12,8 +15,9 @@ extern pros::Motor top_intake;
 extern pros::ADIDigitalOut Low;
 extern pros::Motor baseleftmiddle;
 extern pros::Motor baserightmiddle;
-extern pros::Optical Color_sensor;
+extern pros::Optical color_sensor;
 extern pros::ADIDigitalOut Switch;
+extern pros::ADIDigitalOut matchload;
 
 extern pros::Distance front_dist;
 extern pros::Distance back_dist;

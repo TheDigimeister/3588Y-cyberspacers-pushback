@@ -1,5 +1,7 @@
 #include "main.h"
 
+pros::Controller controller(pros::E_CONTROLLER_MASTER);
+
 pros::MotorGroup left_mg({19, -18, 20});
 pros::MotorGroup right_mg({-16, 15, -17});
 

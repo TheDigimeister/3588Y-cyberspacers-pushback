@@ -1,7 +1,14 @@
 #include "main.h"
+#include "drive.hpp"
 #include "lemlib/api.hpp"
+#include "pros/misc.h"
+#include "pros/rtos.hpp"
 
 int AUTON_NUM = 1;
+
+bool outtake = false;
+bool matchload_state = false;
+bool prev_matchload_state = false;
 
 // Task function to print RGB values from color sensor
 void print_rgb_task(void* param) {
@@ -47,6 +54,29 @@ void initialize() {
     pros::lcd::register_btn1_cb(on_center_button);
 
 	chassis.calibrate();
+
+	color_sensor.set_led_pwm(100);
+
+	pros::Task color_sort([&] (){
+
+		while (true){
+
+			double current_hue = color_sensor.get_hue();
+
+			if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1) || outtake){
+				if (current_hue > 0 && current_hue < 10) {
+					top_intake.move(-127);
+					baseleftmiddle.move(-127);
+					pros::delay(200);
+				}
+				else {
+					top_intake.move(127);
+					baseleftmiddle.move(127);
+				}
+			}
+			pros::delay(50);
+		}
+	});
 
 	pros::Task distance_resets([&] {
 
@@ -163,6 +193,20 @@ void initialize() {
 		pros::delay(500);
 	}
 	});
+
+	pros::Task print_coordinates([=](){
+		while (true) {
+			// std::cout << "Estimated pose: x=" << chassis.getPose().x << ", y=" << chassis.getPose().y << ", theta=" << chassis.getPose().theta;
+			if (true) {
+				std::cout << std::endl;
+				// std::printf("Estimated pose: x=%.3f, y=%.3f, theta=%.3f", chassis.getPose().x, chassis.getPose().y, chassis.getPose().theta);
+				// pros::lcd::print(0, "X:%.2f, Y:%.2f, Theta:%.2f", chassis.getPose().x, chassis.getPose().y, chassis.getPose().theta);
+				controller.print(0, 0, "X:%.2fY:%.2fT:%.2f", chassis.getPose().x, chassis.getPose().y, chassis.getPose().theta);
+				// master.print(0,0,"Dist Theta: %.3f", calculateHeading(chassis.getPose().x, chassis.getPose().y, chassis.getPose().theta, -5.289,5.503,-5.63,-2.028,front_dist.get() * MM_TO_IN,left_dist.get() * MM_TO_IN, NORTH, WEST));
+				pros::delay(100);
+			}
+		}
+	});
 }
 
 /**
@@ -224,47 +268,38 @@ void opcontrol() {
 	bool pto=false;
 	bool outake=true;
 	//when pto = true, the robot is not in pto mode and the drive motors are enabled.
-	pros::Controller controller(pros::E_CONTROLLER_MASTER);
 	Low.set_value(true);
     // loop forever
 	while (true) {
 		// if (!is_sorting) {
-			if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
-				front_intake.move(127);
-				intake_2.move(127);
-				top_intake.move(127);
-			}
-			else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2))
-			{
-				front_intake.move(-81);
-				intake_2.move(10);
-			}
-			else {
-				front_intake.move(0);
-				intake_2.move(0);
-				top_intake.move(0);
-			}
 
 			if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1))
 			{
 				pto=true;
 				Low.set_value(false);
-				pros::delay(20); // 25 ms = 0.025 seconds
-				intake_2.move(90);
-				front_intake.move(-20);
-				top_intake.move(-90);
+				Switch.set_value(true);
+				pros::delay(50); // 25 ms = 0.025 seconds
+				// baseleftmiddle.move(127);
+				baserightmiddle.move(100);
+				intake_2.move(100);
+				// front_intake.move(-20);
+				// top_intake.move(127);
+				outtake = true;
 			}
 			else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2))
 			{
 				pto=true;
 				Low.set_value(false);
-				pros::delay(20); // 25 ms = 0.025 seconds
-				Switch.set_value(true);
-				pros::delay(20); // 25 ms = 0.025 seconds
-				outake=false;
-				intake_2.move(127);
-				front_intake.move(-20);
-				top_intake.move(127);
+				Switch.set_value(false);
+				pros::delay(50); // 25 ms = 0.025 seconds
+				// Switch.set_value(true);
+				// // pros::delay(20); // 25 ms = 0.025 seconds
+				// outake=false;
+				baseleftmiddle.move(-100);
+				baserightmiddle.move(100);
+				intake_2.move(100);
+				// front_intake.move(-20);
+				top_intake.move(-127);
 			}
 			else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_X))
 			{
@@ -276,39 +311,73 @@ void opcontrol() {
 				intake_2.move(0);
 				baserightmiddle.move(0);
 				top_intake.move(0);
+
+				outtake = false;
+				// Switch.set_value(false);
+				// pros::delay(20); // 25 ms = 0.025 seconds
+				// outake=true;
+			}
+
+			bool matchload_pressed = controller.get_digital(DIGITAL_A);
+
+			if (matchload_pressed && !prev_matchload_state) {
+				matchload_state = !matchload_state;
+				matchload.set_value(matchload_state);
+			}
+
+			prev_matchload_state = matchload_pressed;
+
+			if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
+
 				Switch.set_value(false);
-				pros::delay(20); // 25 ms = 0.025 seconds
-				outake=true;
+				front_intake.move(127);
+				intake_2.move(100);
+
 			}
-			if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_B)&&outake==true)
+			else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2))
 			{
-				outake=false;
-				Switch.set_value(false);
-				pros::delay(150); // 25 ms = 0.025 seconds
+				front_intake.move(-81);
+				intake_2.move(50);
 			}
-			else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_B)&&outake==false)
-			{
-				outake=true;
-				Switch.set_value(true);
-				pros::delay(150); // 25 ms = 0.025 seconds
+			else {
+				front_intake.move(0);
+				intake_2.move(0);
+				top_intake.move(0);
 			}
+
+			if (outtake) {
+				front_intake.move(-10);
+			}
+			// if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_B)&&outake==true)
+			// {
+			// 	outake=false;
+			// 	Switch.set_value(false);
+			// 	pros::delay(150); // 25 ms = 0.025 seconds
+			// }
+			// else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_B)&&outake==false)
+			// {
+			// 	outake=true;
+			// 	Switch.set_value(true);
+			// 	pros::delay(150); // 25 ms = 0.025 seconds
+			// }
+
 			if(pto==false)
 			{
 				int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
 				int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
 
 				chassis.arcade(leftY, -rightX);
+			// }
+			// else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)&&pto==true){
+			// 	// baseleftmiddle.move(-127);
+			// 	// baserightmiddle.move(-127);
+			// }
+			// else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1)&&pto==true)
+			// {
+			// 	baseleftmiddle.move(-90);
+			// 	baserightmiddle.move(90);
+			// }
 			}
-			else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)&&pto==true){
-				baseleftmiddle.move(-127);
-				baserightmiddle.move(-127);
-			}
-			else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1)&&pto==true)
-			{
-				baseleftmiddle.move(-90);
-				baserightmiddle.move(90);
-			}
-		// }
 		// delay to save resources
 		pros::delay(25); // 25 ms = 0.025 seconds
 	}
