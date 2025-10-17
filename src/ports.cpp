@@ -17,5 +17,5 @@ pros::ADIDigitalOut matchload('C');
 
 pros::Distance back_dist(5);
 pros::Distance front_dist(3);
-pros::Distance left_dist(2);
-pros::Distance right_dist(1);
+pros::Distance left_dist(1);
+pros::Distance right_dist(2);

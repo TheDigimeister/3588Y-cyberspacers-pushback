@@ -3,12 +3,15 @@
 #include "lemlib/api.hpp"
 #include "pros/misc.h"
 #include "pros/rtos.hpp"
+#include "utils.hpp"
 
-int AUTON_NUM = 1;
+int AUTON_NUM = AUTON1;
 
 bool outtake = false;
 bool matchload_state = false;
 bool prev_matchload_state = false;
+
+bool color_sort_on = false;
 
 // Task function to print RGB values from color sensor
 void print_rgb_task(void* param) {
@@ -57,13 +60,15 @@ void initialize() {
 
 	color_sensor.set_led_pwm(100);
 
+	chassis.setPose(positionFromRaycast(back_dist.get() * MM_TO_IN, BACK_DIST_OFFSET, WEST), positionFromRaycast(right_dist.get() * MM_TO_IN, RIGHT_DIST_OFFSET, SOUTH), 90);
+	
 	pros::Task color_sort([&] (){
 
 		while (true){
 
 			double current_hue = color_sensor.get_hue();
 
-			if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1) || outtake){
+			if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1) || outtake || color_sort_on){
 				if (current_hue > 0 && current_hue < 10) {
 					top_intake.move(-127);
 					baseleftmiddle.move(-127);
@@ -246,6 +251,9 @@ void autonomous() {
 		case 1:
 			pid_test();
 			break;
+		case 2:
+			auton1();
+			break;
 
 	}
 }
@@ -366,7 +374,7 @@ void opcontrol() {
 				int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
 				int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
 
-				chassis.arcade(leftY, -rightX);
+				chassis.arcade(leftY, rightX);
 			// }
 			// else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)&&pto==true){
 			// 	// baseleftmiddle.move(-127);
