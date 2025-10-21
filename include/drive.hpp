@@ -9,6 +9,7 @@
 extern pros::Controller controller;
 
 extern lemlib::Chassis chassis;
+extern pros::Controller controller;
 extern pros::Motor front_intake;
 extern pros::Motor intake_2;
 extern pros::Motor top_intake;

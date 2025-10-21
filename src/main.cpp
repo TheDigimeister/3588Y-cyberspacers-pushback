@@ -2,30 +2,20 @@
 #include "drive.hpp"
 #include "lemlib/api.hpp"
 #include "pros/misc.h"
+#include "pros/motors.h"
 #include "pros/rtos.hpp"
 #include "utils.hpp"
 
-int AUTON_NUM = AUTON1;
+int AUTON_NUM = 1;
+bool is_sorting = false;
 
 bool outtake = false;
 bool matchload_state = false;
 bool prev_matchload_state = false;
-
 bool color_sort_on = false;
+bool color_sorting=false;
 
-// Task function to print RGB values from color sensor
-void print_rgb_task(void* param) {
-	pros::Optical color_sensor(4);
-	color_sensor.set_led_pwm(100);
-	while (true) {
-		auto rgb = color_sensor.get_rgb();
-		std::string msg = "R: " + std::to_string(rgb.red) + " G: " + std::to_string(rgb.green) + " B: " + std::to_string(rgb.blue);
-		pros::lcd::set_text(2, msg);
-		pros::delay(500);
-	}
-}
-
-
+//red color hues (0-10 and 343<)
 
 /**
  * A callback function for LLEMU's center button.
@@ -49,19 +39,43 @@ void on_center_button() {
  * All other competition modes are blocked by initialize; it is recommended
  * to keep execution time for this mode under a few seconds.
  */
+
+
+
 void initialize() {
 	// Start the RGB printing task only once
-	pros::Task rgb_task(print_rgb_task, nullptr, "Print RGB Task");
     pros::lcd::initialize();
     pros::lcd::set_text(1, "Hello Sean!");
     pros::lcd::register_btn1_cb(on_center_button);
-
 	chassis.calibrate();
-
 	color_sensor.set_led_pwm(100);
 
-	chassis.setPose(positionFromRaycast(back_dist.get() * MM_TO_IN, BACK_DIST_OFFSET, WEST), positionFromRaycast(right_dist.get() * MM_TO_IN, RIGHT_DIST_OFFSET, SOUTH), 90);
+	chassis.setBrakeMode(pros::E_MOTOR_BRAKE_BRAKE);
+
+	//color sort task
+
+
+	//color sort for blue
+	// pros::Task color_sort_blue([&] (){
+
+	// 	while (true){
+
+	// 		double current_hue = color_sensor.get_hue();
+
+	// 		if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1) || outtake || color_sort_on){
+	// 			if ((current_hue > 0 && current_hue < 10)||current_hue > 343) {
+	// 				top_intake.move(127);
+	// 				pros::delay(300);
+	// 			}
+	// 			else {
+	// 				top_intake.move(-120);
+	// 			}
+	// 		}
+	// 	}
+
+	// });
 	
+	//color sort for red
 	pros::Task color_sort([&] (){
 
 		while (true){
@@ -69,41 +83,38 @@ void initialize() {
 			double current_hue = color_sensor.get_hue();
 
 			if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1) || outtake || color_sort_on){
-				if (current_hue > 0 && current_hue < 10) {
+				if ((current_hue > 0 && current_hue < 10)||current_hue>343) {
 					top_intake.move(-127);
-					baseleftmiddle.move(-127);
-					pros::delay(200);
-				}
-				else {
-					top_intake.move(127);
-					baseleftmiddle.move(127);
+					color_sorting=true;
+					pros::delay(270);
+					color_sorting=false;
 				}
 			}
 			pros::delay(50);
 		}
 	});
 
-	pros::Task distance_resets([&] {
+	// chassis.setPose(0,0,0);
+	chassis.setPose(positionFromRaycast(back_dist.get()*MM_TO_IN, BACK_DIST_OFFSET, WEST),positionFromRaycast(right_dist.get()*MM_TO_IN, RIGHT_DIST_OFFSET, SOUTH), 90);
+	pros::Task distance_resets([&]{
+		while(true)
+		{
+			float frontReading = front_dist.get()*MM_TO_IN;
+			float leftReading = left_dist.get()*MM_TO_IN;
+			float rightReading = right_dist.get()*MM_TO_IN;
+			float backReading = back_dist.get()*MM_TO_IN;
 
-		while(true) {
-
-			float frontReading = front_dist.get() * MM_TO_IN;
-			float leftReading = left_dist.get() * MM_TO_IN;
-			float rightReading = right_dist.get() * MM_TO_IN;
-			float backReading = back_dist.get() * MM_TO_IN;
-
-			float frontConfidence = front_dist.get_confidence();
-			float leftConfidence = left_dist.get_confidence();
-			float rightConfidence = right_dist.get_confidence();
-			float backConfidence = back_dist.get_confidence();
+			float frontConfidence=front_dist.get_confidence();
+			float leftConfidence=left_dist.get_confidence();
+			float rightConfidence=right_dist.get_confidence();
+			float backConfidence=back_dist.get_confidence();
 
 			lemlib::Pose currentPose = chassis.getPose();
-					
+
 			float estimated_x = currentPose.x;
 			float estimated_y = currentPose.y;
 
 			float normalizedTheta = normalizeAngle(currentPose.theta);
-			// std::printf("Normalized Theta: %.3f", normalizedTheta);
 
 			float estimatedRightPos = 0;
 			float estimatedFrontPos = 0;
@@ -116,59 +127,66 @@ void initialize() {
 			float error_x = 144.0;
 			float error_y = 144.0;
 
-			if (fabs(normalizedTheta) < RAYCAST_RESET_ANGLE_RANGE/2.0) {
+			if(fabs(normalizedTheta)<RAYCAST_RESET_ANGLE_RANGE/2.0)
+			{
 				parallel = true;
 				wallDirection = NORTH;
 			}
-			else if (fabs(normalizedTheta - 180) < RAYCAST_RESET_ANGLE_RANGE/2.0) {
+			else if(fabs(normalizedTheta - 180)<RAYCAST_RESET_ANGLE_RANGE/2.0)
+			{
 				parallel = true;
 				wallDirection = SOUTH;
 			}
-			else if (fabs(normalizedTheta - 90) < RAYCAST_RESET_ANGLE_RANGE/2.0) {
+			else if(fabs(normalizedTheta - 90)<RAYCAST_RESET_ANGLE_RANGE/2.0)
+			{
 				parallel = true;
 				wallDirection = EAST;
 			}
-			else if (fabs(normalizedTheta - 270) < RAYCAST_RESET_ANGLE_RANGE/2.0) {
+			else if(fabs(normalizedTheta - 270)<RAYCAST_RESET_ANGLE_RANGE/2.0)
+			{
 				parallel = true;
 				wallDirection = WEST;
 			}
-			else {
+			else
+			{
 				parallel = false;
 			}
-			
-			if (parallel) {
-				switch (wallDirection) {
+
+			if(parallel)
+			{
+				switch(wallDirection)
+				{
 					case NORTH:
 						estimatedRightPos = positionFromRaycast(rightReading, RIGHT_DIST_OFFSET, EAST);
 						estimatedFrontPos = positionFromRaycast(frontReading, FRONT_DIST_OFFSET, NORTH);
 						estimatedLeftPos = positionFromRaycast(leftReading, LEFT_DIST_OFFSET, WEST);
 						estimatedBackPos = positionFromRaycast(backReading, BACK_DIST_OFFSET, SOUTH);
-						estimated_x = (leftConfidence * estimatedLeftPos + rightConfidence * estimatedRightPos) / (leftConfidence + rightConfidence);
-						estimated_y = (frontConfidence * estimatedFrontPos + backConfidence * estimatedBackPos) / (frontConfidence + backConfidence);
+						estimated_x = (leftConfidence * estimatedLeftPos + rightConfidence *estimatedRightPos)/(leftConfidence+rightConfidence);
+						estimated_y = (frontConfidence * estimatedFrontPos + backConfidence * estimatedBackPos)/(frontConfidence+backConfidence);
 						break;
 					case SOUTH:
 						estimatedRightPos = positionFromRaycast(rightReading, RIGHT_DIST_OFFSET, WEST);
 						estimatedFrontPos = positionFromRaycast(frontReading, FRONT_DIST_OFFSET, SOUTH);
 						estimatedLeftPos = positionFromRaycast(leftReading, LEFT_DIST_OFFSET, EAST);
 						estimatedBackPos = positionFromRaycast(backReading, BACK_DIST_OFFSET, NORTH);
-						estimated_x = (leftConfidence * estimatedLeftPos + rightConfidence * estimatedRightPos) / (leftConfidence + rightConfidence);
-						estimated_y = (frontConfidence * estimatedFrontPos + backConfidence * estimatedBackPos) / (frontConfidence + backConfidence);
+						estimated_x = (leftConfidence * estimatedLeftPos + rightConfidence *estimatedRightPos)/(leftConfidence+rightConfidence);
+						estimated_y = (frontConfidence * estimatedFrontPos + backConfidence * estimatedBackPos)/(frontConfidence+backConfidence);
 						break;
 					case EAST:
 						estimatedRightPos = positionFromRaycast(rightReading, RIGHT_DIST_OFFSET, SOUTH);
 						estimatedFrontPos = positionFromRaycast(frontReading, FRONT_DIST_OFFSET, EAST);
 						estimatedLeftPos = positionFromRaycast(leftReading, LEFT_DIST_OFFSET, NORTH);
 						estimatedBackPos = positionFromRaycast(backReading, BACK_DIST_OFFSET, WEST);
-						estimated_y = (leftConfidence * estimatedLeftPos + rightConfidence * estimatedRightPos) / (leftConfidence + rightConfidence);
-						estimated_x = (frontConfidence * estimatedFrontPos + backConfidence * estimatedBackPos) / (frontConfidence + backConfidence);
+						estimated_y = (leftConfidence * estimatedLeftPos + rightConfidence *estimatedRightPos)/(leftConfidence+rightConfidence);
+						estimated_x = (frontConfidence * estimatedFrontPos + backConfidence * estimatedBackPos)/(frontConfidence+backConfidence);
 						break;
 					case WEST:
 						estimatedRightPos = positionFromRaycast(rightReading, RIGHT_DIST_OFFSET, NORTH);
 						estimatedFrontPos = positionFromRaycast(frontReading, FRONT_DIST_OFFSET, WEST);
 						estimatedLeftPos = positionFromRaycast(leftReading, LEFT_DIST_OFFSET, SOUTH);
 						estimatedBackPos = positionFromRaycast(backReading, BACK_DIST_OFFSET, EAST);
-						estimated_y = (leftConfidence * estimatedLeftPos + rightConfidence * estimatedRightPos) / (leftConfidence + rightConfidence);
-						estimated_x = (frontConfidence * estimatedFrontPos + backConfidence * estimatedBackPos) / (frontConfidence + backConfidence);
+						estimated_y = (leftConfidence * estimatedLeftPos + rightConfidence *estimatedRightPos)/(leftConfidence+rightConfidence);
+						estimated_x = (frontConfidence * estimatedFrontPos + backConfidence * estimatedBackPos)/(frontConfidence+backConfidence);
 						break;
 					default:
 						std::printf("Invalid wall direction");
@@ -178,36 +196,26 @@ void initialize() {
 				error_x = fabs(estimated_x - currentPose.x);
 				error_y = fabs(estimated_y - currentPose.y);
 
-				// std::printf("X Error: %.3f, Y Error: %.3f\n", error_x, error_y);
-
-				if (error_x > RAYCAST_RESET_MIN_ERROR && error_x < RAYCAST_RESET_MAX_ERROR) {
-					chassis.setPose(estimated_x, chassis.getPose().y, chassis.getPose().theta);
-					// std::printf("X pos reset!\n");
+				if(error_x>RAYCAST_RESET_MIN_ERROR && error_x < RAYCAST_RESET_MAX_ERROR)
+				{
+					chassis.setPose(estimated_x,chassis.getPose().y,chassis.getPose().theta);
 				}
-
-				if (error_y > RAYCAST_RESET_MIN_ERROR && error_y < RAYCAST_RESET_MAX_ERROR) {
-					chassis.setPose(chassis.getPose().x, estimated_y, chassis.getPose().theta);
-					// std::printf("Y pos reset!\n");
+				if(error_y>RAYCAST_RESET_MIN_ERROR && error_y<RAYCAST_RESET_MAX_ERROR)
+				{
+					chassis.setPose(chassis.getPose().x,estimated_y,chassis.getPose().theta);
 				}
-
-				// if (odom_state == true && frontReading < 300) {
-				// 	chassis.setPose(estimated_x, estimated_y, chassis.getPose().theta);
-				// }
 			}
-
-		pros::delay(500);
-	}
+			pros::delay(500);
+		}
 	});
 
 	pros::Task print_coordinates([=](){
-		while (true) {
-			// std::cout << "Estimated pose: x=" << chassis.getPose().x << ", y=" << chassis.getPose().y << ", theta=" << chassis.getPose().theta;
-			if (true) {
-				std::cout << std::endl;
-				// std::printf("Estimated pose: x=%.3f, y=%.3f, theta=%.3f", chassis.getPose().x, chassis.getPose().y, chassis.getPose().theta);
-				// pros::lcd::print(0, "X:%.2f, Y:%.2f, Theta:%.2f", chassis.getPose().x, chassis.getPose().y, chassis.getPose().theta);
-				controller.print(0, 0, "X:%.2fY:%.2fT:%.2f", chassis.getPose().x, chassis.getPose().y, chassis.getPose().theta);
-				// master.print(0,0,"Dist Theta: %.3f", calculateHeading(chassis.getPose().x, chassis.getPose().y, chassis.getPose().theta, -5.289,5.503,-5.63,-2.028,front_dist.get() * MM_TO_IN,left_dist.get() * MM_TO_IN, NORTH, WEST));
+		while(true)
+		{
+			if(true)
+			{
+				std::cout<<std::endl;
+				controller.print(0,0,"X:%.2fY:%.2fT:%.2f",chassis.getPose().x,chassis.getPose().y,chassis.getPose().theta);
 				pros::delay(100);
 			}
 		}
@@ -274,119 +282,102 @@ void autonomous() {
 
 void opcontrol() {
 	bool pto=false;
-	bool outake=true;
-	//when pto = true, the robot is not in pto mode and the drive motors are enabled.
+	// bool outake=true;
+	bool loadertech=false;
 	Low.set_value(true);
-    // loop forever
 	while (true) {
 		// if (!is_sorting) {
+		if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)&&color_sorting==false)
+		{
+			top_intake.move(127);
+		}
+		else if(!controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1) && color_sorting==false)
+		{
+			top_intake.move(0);
+		}
+		if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1))
+		{
+			front_intake.move(127);
+			intake_2.move(100);
+		}
+		else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2))
+		{
+			front_intake.move(-81);
+			intake_2.move( 50);
+		}
+		else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1))
+		{
+			pto=true;
+			Low.set_value(false);
+			Switch.set_value(true);
+			pros::delay(50);
+			baserightmiddle.move(127);
+			baseleftmiddle.move(127);
+			intake_2.move(127);
+			front_intake.move(-40);
+			top_intake.move(127);
+			// outtake=true;
+		}
+		else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2))
+		{
+			pto=true;
+			Low.set_value(false);
+			pros::delay(50);
+			baseleftmiddle.move(-127);
+			baserightmiddle.move(110);
+			intake_2.move(110);
+			front_intake.move(-40);
+			top_intake.move(-127);
+		}
+		//  if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_X))
+		else
+		{
+			pto=false;
+			Low.set_value(true);
+			Switch.set_value(false);
+			pros::delay(20);
+			front_intake.move(0);
+			baseleftmiddle.move(0);
+			intake_2.move(0);
+			baserightmiddle.move(0);
+			// outtake=false;
+		}
+		
+		if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y)&&loadertech==false)
+		{
+			loadertech=true;
+			matchload.set_value(true);
+			pros::delay(50);
+		}
+		else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y)&&loadertech==true)
+		{
+			loadertech=false;
+			matchload.set_value(false);
+			pros::delay(50);
+		}
 
-			if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1))
-			{
-				pto=true;
-				Low.set_value(false);
-				Switch.set_value(true);
-				pros::delay(50); // 25 ms = 0.025 seconds
-				// baseleftmiddle.move(127);
-				baserightmiddle.move(100);
-				intake_2.move(100);
-				// front_intake.move(-20);
-				// top_intake.move(127);
-				outtake = true;
-			}
-			else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2))
-			{
-				pto=true;
-				Low.set_value(false);
-				Switch.set_value(false);
-				pros::delay(50); // 25 ms = 0.025 seconds
-				// Switch.set_value(true);
-				// // pros::delay(20); // 25 ms = 0.025 seconds
-				// outake=false;
-				baseleftmiddle.move(-100);
-				baserightmiddle.move(100);
-				intake_2.move(100);
-				// front_intake.move(-20);
-				top_intake.move(-127);
-			}
-			else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_X))
-			{
-				pto=false;
-				Low.set_value(true);
-				pros::delay(20); // 25 ms = 0.025 seconds
-				front_intake.move(0);
-				baseleftmiddle.move(0);
-				intake_2.move(0);
-				baserightmiddle.move(0);
-				top_intake.move(0);
+		bool matchload_pressed = controller.get_digital(DIGITAL_A);
 
-				outtake = false;
-				// Switch.set_value(false);
-				// pros::delay(20); // 25 ms = 0.025 seconds
-				// outake=true;
-			}
+		if(matchload_pressed && !prev_matchload_state)
+		{
+			matchload_state = !matchload_state;
+			matchload.set_value(matchload_state);
+		}
 
-			bool matchload_pressed = controller.get_digital(DIGITAL_A);
+		prev_matchload_state = matchload_pressed;
 
-			if (matchload_pressed && !prev_matchload_state) {
-				matchload_state = !matchload_state;
-				matchload.set_value(matchload_state);
-			}
-
-			prev_matchload_state = matchload_pressed;
-
-			if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
-
-				Switch.set_value(false);
-				front_intake.move(127);
-				intake_2.move(100);
-
-			}
-			else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2))
-			{
-				front_intake.move(-81);
-				intake_2.move(50);
-			}
-			else {
-				front_intake.move(0);
-				intake_2.move(0);
-				top_intake.move(0);
-			}
-
-			if (outtake) {
-				front_intake.move(-10);
-			}
-			// if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_B)&&outake==true)
-			// {
-			// 	outake=false;
-			// 	Switch.set_value(false);
-			// 	pros::delay(150); // 25 ms = 0.025 seconds
-			// }
-			// else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_B)&&outake==false)
-			// {
-			// 	outake=true;
-			// 	Switch.set_value(true);
-			// 	pros::delay(150); // 25 ms = 0.025 seconds
-			// }
-
-			if(pto==false)
-			{
-				int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-				int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
-
-				chassis.arcade(leftY, rightX);
-			// }
-			// else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)&&pto==true){
-			// 	// baseleftmiddle.move(-127);
-			// 	// baserightmiddle.move(-127);
-			// }
-			// else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1)&&pto==true)
-			// {
-			// 	baseleftmiddle.move(-90);
-			// 	baserightmiddle.move(90);
-			// }
-			}
-		// delay to save resources
+		// if(outtake)
+		// {
+		// 	front_intake.move(-10);
+		// }
+		if(pto==false)
+		{
+			int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+			int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+		
+			chassis.arcade(leftY, rightX);
+		}
+		//}
 		pros::delay(25); // 25 ms = 0.025 seconds
 	}
 }
