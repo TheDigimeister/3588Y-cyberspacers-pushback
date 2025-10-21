@@ -2,8 +2,8 @@
 #include "main.h"
 
 void pid_test() {
-    Low.set_value(true);
-    Switch.set_value(false);
+    pto.set_value(true);
+    hood.set_value(false);
     pros::delay(50);
     chassis.setPose(-72+(back_dist.get()*MM_TO_IN)+BACK_DIST_OFFSET, -72+(right_dist.get()*MM_TO_IN)+RIGHT_DIST_OFFSET, 90);
     front_intake.move(120);
@@ -21,8 +21,8 @@ void pid_test() {
     chassis.moveToPoint(-63,-51,500);
     pros::delay(920);
     chassis.moveToPose(-25,-50,270,1000,{.forwards=false,.minSpeed=95,.earlyExitRange=1.5},false);
-    Low.set_value(false);
-	Switch.set_value(true);
+    pto.set_value(false);
+	hood.set_value(true);
     pros::delay(50);
 	baserightmiddle.move(127);
 	baseleftmiddle.move(127);

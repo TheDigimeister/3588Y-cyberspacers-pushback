@@ -1,4 +1,5 @@
 #include "main.h"
+#include "autons.hpp"
 #include "drive.hpp"
 #include "lemlib/api.hpp"
 #include "pros/misc.h"
@@ -6,12 +7,21 @@
 #include "pros/rtos.hpp"
 #include "utils.hpp"
 
-int AUTON_NUM = 1;
+int AUTON_NUM = REDLEFT9;
 bool is_sorting = false;
 
 bool outtake = false;
+
 bool matchload_state = false;
+bool trap_state = false;
+bool parking_state = false;
+bool descore_state = false;
+
 bool prev_matchload_state = false;
+bool prev_trap_state = false;
+bool prev_parking_state = false;
+bool prev_descore_state = false;
+
 bool color_sort_on = false;
 bool color_sorting=false;
 
@@ -51,6 +61,7 @@ void initialize() {
 	color_sensor.set_led_pwm(100);
 
 	chassis.setBrakeMode(pros::E_MOTOR_BRAKE_BRAKE);
+	pto.set_value(true);
 
 	//color sort task
 
@@ -75,24 +86,24 @@ void initialize() {
 
 	// });
 	
-	//color sort for red
-	pros::Task color_sort([&] (){
+	// //color sort for red
+	// pros::Task color_sort([&] (){
 
-		while (true){
+	// 	while (true){
 
-			double current_hue = color_sensor.get_hue();
+	// 		double current_hue = color_sensor.get_hue();
 
-			if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1) || outtake || color_sort_on){
-				if ((current_hue > 0 && current_hue < 10)||current_hue>343) {
-					top_intake.move(-127);
-					color_sorting=true;
-					pros::delay(270);
-					color_sorting=false;
-				}
-			}
-			pros::delay(50);
-		}
-	});
+	// 		if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1) || outtake || color_sort_on){
+	// 			if ((current_hue > 0 && current_hue < 10)||current_hue>343) {
+	// 				top_intake.move(-127);
+	// 				color_sorting=true;
+	// 				pros::delay(270);
+	// 				color_sorting=false;
+	// 			}
+	// 		}
+	// 		pros::delay(50);
+	// 	}
+	// });
 
 	// chassis.setPose(0,0,0);
 	chassis.setPose(positionFromRaycast(back_dist.get()*MM_TO_IN, BACK_DIST_OFFSET, WEST),positionFromRaycast(right_dist.get()*MM_TO_IN, RIGHT_DIST_OFFSET, SOUTH), 90);
@@ -262,6 +273,9 @@ void autonomous() {
 		case 2:
 			auton1();
 			break;
+		case 3:
+			red_left_9();
+			break;
 
 	}
 }
@@ -281,10 +295,10 @@ void autonomous() {
  */
 
 void opcontrol() {
-	bool pto=false;
+	bool pto_state=false;
 	// bool outake=true;
 	bool loadertech=false;
-	Low.set_value(true);
+	pto.set_value(true);
 	while (true) {
 		// if (!is_sorting) {
 		if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)&&color_sorting==false)
@@ -307,9 +321,9 @@ void opcontrol() {
 		}
 		else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1))
 		{
-			pto=true;
-			Low.set_value(false);
-			Switch.set_value(true);
+			pto_state=true;
+			pto.set_value(false);
+			hood.set_value(true);
 			pros::delay(50);
 			baserightmiddle.move(127);
 			baseleftmiddle.move(127);
@@ -320,8 +334,8 @@ void opcontrol() {
 		}
 		else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2))
 		{
-			pto=true;
-			Low.set_value(false);
+			pto_state=true;
+			pto.set_value(false);
 			pros::delay(50);
 			baseleftmiddle.move(-127);
 			baserightmiddle.move(110);
@@ -332,9 +346,9 @@ void opcontrol() {
 		//  if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_X))
 		else
 		{
-			pto=false;
-			Low.set_value(true);
-			Switch.set_value(false);
+			pto_state=false;
+			pto.set_value(true);
+			hood.set_value(false);
 			pros::delay(20);
 			front_intake.move(0);
 			baseleftmiddle.move(0);
@@ -343,20 +357,23 @@ void opcontrol() {
 			// outtake=false;
 		}
 		
-		if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y)&&loadertech==false)
-		{
-			loadertech=true;
-			matchload.set_value(true);
-			pros::delay(50);
-		}
-		else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y)&&loadertech==true)
-		{
-			loadertech=false;
-			matchload.set_value(false);
-			pros::delay(50);
-		}
+		// if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y)&&loadertech==false)
+		// {
+		// 	loadertech=true;
+		// 	matchload.set_value(true);
+		// 	pros::delay(50);
+		// }
+		// else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y)&&loadertech==true)
+		// {
+		// 	loadertech=false;
+		// 	matchload.set_value(false);
+		// 	pros::delay(50);
+		// }
 
-		bool matchload_pressed = controller.get_digital(DIGITAL_A);
+		bool matchload_pressed = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
+		bool trap_pressed = controller.get_digital(pros::E_CONTROLLER_DIGITAL_LEFT);
+		bool parking_pressed = controller.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN);
+		bool descore_pressed = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP);
 
 		if(matchload_pressed && !prev_matchload_state)
 		{
@@ -364,13 +381,34 @@ void opcontrol() {
 			matchload.set_value(matchload_state);
 		}
 
+		if(trap_pressed && !prev_trap_state)
+		{
+			trap_state = !trap_state;
+			trap.set_value(trap_state);
+		}
+
+		if(parking_pressed && !prev_parking_state)
+		{
+			parking_state = !parking_state;
+			parking.set_value(parking_state);
+		}
+
+		if(descore_pressed && !prev_descore_state)
+		{
+			descore_state = !descore_state;
+			descore.set_value(descore_state);
+		}
+
 		prev_matchload_state = matchload_pressed;
+		prev_trap_state = trap_pressed;
+		prev_parking_state = parking_pressed;
+		prev_descore_state = descore_pressed;
 
 		// if(outtake)
 		// {
 		// 	front_intake.move(-10);
 		// }
-		if(pto==false)
+		if(pto_state==false)
 		{
 			int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
 			int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);

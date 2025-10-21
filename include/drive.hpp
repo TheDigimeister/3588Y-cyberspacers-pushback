@@ -13,12 +13,15 @@ extern pros::Controller controller;
 extern pros::Motor front_intake;
 extern pros::Motor intake_2;
 extern pros::Motor top_intake;
-extern pros::ADIDigitalOut Low;
+extern pros::ADIDigitalOut pto;
 extern pros::Motor baseleftmiddle;
 extern pros::Motor baserightmiddle;
 extern pros::Optical color_sensor;
-extern pros::ADIDigitalOut Switch;
+extern pros::ADIDigitalOut hood;
 extern pros::ADIDigitalOut matchload;
+extern pros::ADIDigitalOut descore;
+extern pros::ADIDigitalOut trap;
+extern pros::ADIDigitalOut parking;
 
 extern pros::Distance front_dist;
 extern pros::Distance back_dist;
